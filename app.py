@@ -7,7 +7,7 @@ import difflib
 import requests
 import streamlit as st
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -246,7 +246,7 @@ def prepare_card_image(source_path):
     Toepassen van anti-counterfeit maatregelen:
     1. Zwart-wit conversie
     2. Snijden naar kaartverhouding
-    3. Volledig dekkend diagonaal watermerk over de GEHELE kaart
+    3. Volledig dekkend diagonaal watermerk met 50% grotere tekst
     4. Banners boven en onder
     """
     base_img = Image.open(source_path).convert("RGB")
@@ -272,26 +272,35 @@ def prepare_card_image(source_path):
     # 3. Maken van een dekkend diagonaal watermerk-raster over de hele kaart
     wm_overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     
-    # Gebruik een ruime canvasgrootte (2x) zodat rotatie geen blanco hoeken achterlaat
     canvas_size = int((width**2 + height**2)**0.5 * 1.5)
     text_canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
     tc_draw = ImageDraw.Draw(text_canvas)
 
     watermark_text = "PROXY - NOT FOR SALE"
     
-    # Afstanden voor het herhalende patroon
-    step_x = int(width * 0.8)
-    step_y = int(height * 0.12)
+    # Probeer een TrueType lettertype te laden met een 50% grotere font-size
+    font_size = int(width * 0.09)  # 50% groter gemaakte font-size (voorheen ~0.06)
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+        except IOError:
+            font = ImageFont.load_default()
+
+    # Afstanden voor het herhalende patroon (aangepast voor de grotere tekst)
+    step_x = int(width * 1.1)
+    step_y = int(height * 0.16)
 
     # Dubbele lus om het hele vlak op te vullen met tekstblokken
     for y in range(-canvas_size, canvas_size * 2, step_y):
-        # Verschuif elke tweede regel lichtjes voor een mooier meanderend patroon
         offset_x = (y // step_y) % 2 * (step_x // 2)
         for x in range(-canvas_size, canvas_size * 2, step_x):
             tc_draw.text(
                 (x + offset_x, y), 
                 watermark_text, 
-                fill=(220, 0, 0, 110)  # Rood, semi-transparant
+                fill=(220, 0, 0, 110),  # Rood, semi-transparant
+                font=font
             )
 
     # Draai het gemaakte raster 30 graden
