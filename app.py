@@ -243,72 +243,71 @@ def download_card_image(card):
 
 def prepare_card_image(source_path):
     """
-    Toepassen van maximale anti-counterfeit maatregelen:
-    1. Kaart omzetten naar Zwart-Wit (Grijswaarden)
-    2. Kaart bijsnijden naar de juiste verhoudingen
-    3. Diagonaal semi-transparant watermerk over het midden
-    4. Banners bovenaan en onderaan
+    Toepassen van anti-counterfeit maatregelen:
+    1. Zwart-wit conversie
+    2. Snijden naar kaartverhouding
+    3. Opvallend diagonaal semi-transparant watermerk (ROOD/TRANSPARANT)
+    4. Banners boven en onder met duidelijke tekst
     """
-    image = Image.open(source_path).convert("RGB")
+    base_img = Image.open(source_path).convert("RGB")
     
-    # 1. Omzetten naar Zwart-Wit
-    image = image.convert("L").convert("RGB")
+    # 1. Omzetten naar Zwart-Wit (Grijswaarden)
+    base_img = base_img.convert("L").convert("RGB")
 
-    # 2. Bijsnijden naar Lorcana kaartverhouding
+    # 2. Bijsnijden naar Lorcana kaartverhouding (63mm x 88mm)
     target_ratio = CARD_WIDTH_MM / CARD_HEIGHT_MM
-    current_ratio = image.width / image.height
+    current_ratio = base_img.width / base_img.height
 
     if current_ratio > target_ratio:
-        new_width = int(image.height * target_ratio)
-        left = (image.width - new_width) // 2
-        image = image.crop((left, 0, left + new_width, image.height))
+        new_width = int(base_img.height * target_ratio)
+        left = (base_img.width - new_width) // 2
+        base_img = base_img.crop((left, 0, left + new_width, base_img.height))
     else:
-        new_height = int(image.width / target_ratio)
-        top = (image.height - new_height) // 2
-        image = image.crop((0, top, image.width, top + new_height))
+        new_height = int(base_img.width / target_ratio)
+        top = (base_img.height - new_height) // 2
+        base_img = base_img.crop((0, top, base_img.width, top + new_height))
 
-    # 3. Diagonaal Semi-Transparant Watermerk
-    overlay = Image.new("RGBA", image.size, (255, 255, 255, 0))
-    overlay_draw = ImageDraw.Draw(overlay)
-    
+    width, height = base_img.size
+
+    # 3. Transparante laag maken voor het watermerk
+    watermark_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+
     watermark_text = "PROXY - NOT FOR SALE"
     
-    bbox = overlay_draw.textbbox((0, 0), watermark_text)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    # Maak een losse laag voor de gedraaide tekst
+    text_box_w = int(width * 1.2)
+    text_box_h = int(height * 0.2)
+    text_tile = Image.new("RGBA", (text_box_w, text_box_h), (0, 0, 0, 0))
+    tile_draw = ImageDraw.Draw(text_tile)
 
-    text_img = Image.new("RGBA", (tw + 20, th + 20), (255, 255, 255, 0))
-    text_draw = ImageDraw.Draw(text_img)
-    
-    # Rood semi-transparant watermerk
-    text_draw.text((10, 10), watermark_text, fill=(255, 0, 0, 90))
-    
-    rotated_text = text_img.rotate(30, expand=True, resample=Image.BICUBIC)
-    
-    wx = (image.width - rotated_text.width) // 2
-    wy = (image.height - rotated_text.height) // 2
-    overlay.paste(rotated_text, (wx, wy), rotated_text)
+    # Teken rode tekst met ~45% transparantie (Alpha = 120 op schaal van 255)
+    tile_draw.text((20, 20), watermark_text, fill=(230, 0, 0, 120))
 
-    image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+    # Draai de tekst 30 graden
+    rotated_tile = text_tile.rotate(30, expand=True, resample=Image.BICUBIC)
 
-    # 4. Zwarte banners boven en onder
-    draw = ImageDraw.Draw(image)
+    # Centreer het watermerk over het midden van de kaart
+    wx = (width - rotated_tile.width) // 2
+    wy = (height - rotated_tile.height) // 2
+    watermark_layer.paste(rotated_tile, (wx, wy), rotated_tile)
+
+    # Voeg het watermerk samen met de zwart-wit afbeelding
+    combined = Image.alpha_composite(base_img.convert("RGBA"), watermark_layer).convert("RGB")
+
+    # 4. Zwarte Banners Boven en Onder
+    final_draw = ImageDraw.Draw(combined)
     banner_label = "PROXY - NOT FOR SALE"
-    
-    bbox_banner = draw.textbbox((0, 0), banner_label)
-    btw, bth = bbox_banner[2] - bbox_banner[0], bbox_banner[3] - bbox_banner[1]
-    
-    padding = 10
-    banner_height = bth + (padding * 2)
+    banner_height = int(height * 0.05)
 
-    # Banner bovenaan
-    draw.rectangle((0, 0, image.width, banner_height), fill="black")
-    draw.text(((image.width - btw) // 2, padding), banner_label, fill="white")
+    # Bovenste banner
+    final_draw.rectangle((0, 0, width, banner_height), fill="black")
+    final_draw.text((int(width * 0.15), int(banner_height * 0.2)), banner_label, fill="white")
 
-    # Banner onderaan
-    draw.rectangle((0, image.height - banner_height, image.width, image.height), fill="black")
-    draw.text(((image.width - btw) // 2, image.height - banner_height + padding), banner_label, fill="white")
+    # Onderste banner
+    final_draw.rectangle((0, height - banner_height, width, height), fill="black")
+    final_draw.text((int(width * 0.15), height - banner_height + int(banner_height * 0.2)), banner_label, fill="white")
 
-    return image
+    return combined
 
 def build_pdf_bytes(matches, progress_bar):
     page_width, page_height = A4
