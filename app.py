@@ -246,7 +246,7 @@ def prepare_card_image(source_path):
     Toepassen van anti-counterfeit maatregelen:
     1. Zwart-wit conversie
     2. Snijden naar kaartverhouding
-    3. Diagonaal semi-transparant watermerk recht over het artwork
+    3. Volledig dekkend diagonaal watermerk over de GEHELE kaart
     4. Banners boven en onder
     """
     base_img = Image.open(source_path).convert("RGB")
@@ -269,28 +269,37 @@ def prepare_card_image(source_path):
 
     width, height = base_img.size
 
-    # 3. Maken van een transparante laag over de volledige kaart
+    # 3. Maken van een dekkend diagonaal watermerk-raster over de hele kaart
     wm_overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     
-    # Maak een extra grote tegel om tekst in te tekenen en schuin te draaien
-    diagonal_size = int((width**2 + height**2)**0.5)
-    text_canvas = Image.new("RGBA", (diagonal_size, diagonal_size), (0, 0, 0, 0))
+    # Gebruik een ruime canvasgrootte (2x) zodat rotatie geen blanco hoeken achterlaat
+    canvas_size = int((width**2 + height**2)**0.5 * 1.5)
+    text_canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
     tc_draw = ImageDraw.Draw(text_canvas)
 
     watermark_text = "PROXY - NOT FOR SALE"
     
-    # Teken meerdere regels tekst schuin over het hele vlak
-    line_spacing = int(diagonal_size / 6)
-    for y in range(0, diagonal_size, line_spacing):
-        # Rode semi-transparante tekst (R, G, B, Alpha)
-        tc_draw.text((30, y), f"{watermark_text}   ---   {watermark_text}", fill=(220, 0, 0, 130))
+    # Afstanden voor het herhalende patroon
+    step_x = int(width * 0.8)
+    step_y = int(height * 0.12)
 
-    # Draai het tekstvlak 35 graden
-    rotated_text = text_canvas.rotate(35, expand=False, resample=Image.BICUBIC)
+    # Dubbele lus om het hele vlak op te vullen met tekstblokken
+    for y in range(-canvas_size, canvas_size * 2, step_y):
+        # Verschuif elke tweede regel lichtjes voor een mooier meanderend patroon
+        offset_x = (y // step_y) % 2 * (step_x // 2)
+        for x in range(-canvas_size, canvas_size * 2, step_x):
+            tc_draw.text(
+                (x + offset_x, y), 
+                watermark_text, 
+                fill=(220, 0, 0, 110)  # Rood, semi-transparant
+            )
 
-    # Centreer en plak het gedraaide watermerk op de overlay
-    crop_x = (diagonal_size - width) // 2
-    crop_y = (diagonal_size - height) // 2
+    # Draai het gemaakte raster 30 graden
+    rotated_text = text_canvas.rotate(30, expand=False, resample=Image.BICUBIC)
+
+    # Uitsnijden van het midden van het gedraaide raster precies op kaartformaat
+    crop_x = (canvas_size - width) // 2
+    crop_y = (canvas_size - height) // 2
     wm_overlay.paste(rotated_text.crop((crop_x, crop_y, crop_x + width, crop_y + height)))
 
     # Voeg het watermerk samen met het artwork
@@ -401,7 +410,7 @@ with st.sidebar:
     st.divider()
     st.markdown("### ⚠️ Rechten & Fair Use")
     st.markdown(
-        "Alle gegenereerde kaarten worden in **zwart-wit** afgedrukt met een **'PROXY - NOT FOR SALE'** watermerk recht over het artwork. "
+        "Alle gegenereerde kaarten worden in **zwart-wit** afgedrukt met een **volledig dekkend 'PROXY - NOT FOR SALE'** watermerk over de gehele kaart. "
         "Deze proxies zijn **niet** toegestaan op officiële toernooien en mogen **niet** worden verkocht."
     )
 
