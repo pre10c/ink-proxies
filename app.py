@@ -246,8 +246,8 @@ def prepare_card_image(source_path):
     Toepassen van anti-counterfeit maatregelen:
     1. Zwart-wit conversie
     2. Snijden naar kaartverhouding
-    3. Opvallend diagonaal semi-transparant watermerk (ROOD/TRANSPARANT)
-    4. Banners boven en onder met duidelijke tekst
+    3. Diagonaal semi-transparant watermerk recht over het artwork
+    4. Banners boven en onder
     """
     base_img = Image.open(source_path).convert("RGB")
     
@@ -269,30 +269,32 @@ def prepare_card_image(source_path):
 
     width, height = base_img.size
 
-    # 3. Transparante laag maken voor het watermerk
-    watermark_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    # 3. Maken van een transparante laag over de volledige kaart
+    wm_overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    
+    # Maak een extra grote tegel om tekst in te tekenen en schuin te draaien
+    diagonal_size = int((width**2 + height**2)**0.5)
+    text_canvas = Image.new("RGBA", (diagonal_size, diagonal_size), (0, 0, 0, 0))
+    tc_draw = ImageDraw.Draw(text_canvas)
 
     watermark_text = "PROXY - NOT FOR SALE"
     
-    # Maak een losse laag voor de gedraaide tekst
-    text_box_w = int(width * 1.2)
-    text_box_h = int(height * 0.2)
-    text_tile = Image.new("RGBA", (text_box_w, text_box_h), (0, 0, 0, 0))
-    tile_draw = ImageDraw.Draw(text_tile)
+    # Teken meerdere regels tekst schuin over het hele vlak
+    line_spacing = int(diagonal_size / 6)
+    for y in range(0, diagonal_size, line_spacing):
+        # Rode semi-transparante tekst (R, G, B, Alpha)
+        tc_draw.text((30, y), f"{watermark_text}   ---   {watermark_text}", fill=(220, 0, 0, 130))
 
-    # Teken rode tekst met ~45% transparantie (Alpha = 120 op schaal van 255)
-    tile_draw.text((20, 20), watermark_text, fill=(230, 0, 0, 120))
+    # Draai het tekstvlak 35 graden
+    rotated_text = text_canvas.rotate(35, expand=False, resample=Image.BICUBIC)
 
-    # Draai de tekst 30 graden
-    rotated_tile = text_tile.rotate(30, expand=True, resample=Image.BICUBIC)
+    # Centreer en plak het gedraaide watermerk op de overlay
+    crop_x = (diagonal_size - width) // 2
+    crop_y = (diagonal_size - height) // 2
+    wm_overlay.paste(rotated_text.crop((crop_x, crop_y, crop_x + width, crop_y + height)))
 
-    # Centreer het watermerk over het midden van de kaart
-    wx = (width - rotated_tile.width) // 2
-    wy = (height - rotated_tile.height) // 2
-    watermark_layer.paste(rotated_tile, (wx, wy), rotated_tile)
-
-    # Voeg het watermerk samen met de zwart-wit afbeelding
-    combined = Image.alpha_composite(base_img.convert("RGBA"), watermark_layer).convert("RGB")
+    # Voeg het watermerk samen met het artwork
+    combined = Image.alpha_composite(base_img.convert("RGBA"), wm_overlay).convert("RGB")
 
     # 4. Zwarte Banners Boven en Onder
     final_draw = ImageDraw.Draw(combined)
@@ -399,7 +401,7 @@ with st.sidebar:
     st.divider()
     st.markdown("### ⚠️ Rechten & Fair Use")
     st.markdown(
-        "Alle gegenereerde kaarten worden in **zwart-wit** afgedrukt met een **'PROXY - NOT FOR SALE'** watermerk. "
+        "Alle gegenereerde kaarten worden in **zwart-wit** afgedrukt met een **'PROXY - NOT FOR SALE'** watermerk recht over het artwork. "
         "Deze proxies zijn **niet** toegestaan op officiële toernooien en mogen **niet** worden verkocht."
     )
 
