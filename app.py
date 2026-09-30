@@ -243,11 +243,18 @@ def download_card_image(card):
 
 def prepare_card_image(source_path):
     """
-    Toepassen van anti-counterfeit maatregelen:
-    1. Kaart bijsnijden naar de juiste verhoudingen
-    2. Toevoegen van opvallende 'NOT FOR SALE - PROXY' banners boven en onder
+    Toepassen van maximale anti-counterfeit maatregelen:
+    1. Kaart omzetten naar Zwart-Wit (Grijswaarden)
+    2. Kaart bijsnijden naar de juiste verhoudingen
+    3. Diagonaal semi-transparant watermerk over het midden
+    4. Banners bovenaan en onderaan
     """
     image = Image.open(source_path).convert("RGB")
+    
+    # 1. Omzetten naar Zwart-Wit
+    image = image.convert("L").convert("RGB")
+
+    # 2. Bijsnijden naar Lorcana kaartverhouding
     target_ratio = CARD_WIDTH_MM / CARD_HEIGHT_MM
     current_ratio = image.width / image.height
 
@@ -260,23 +267,46 @@ def prepare_card_image(source_path):
         top = (image.height - new_height) // 2
         image = image.crop((0, top, image.width, top + new_height))
 
-    draw = ImageDraw.Draw(image)
-    label = "PROXY - NOT FOR SALE"
+    # 3. Diagonaal Semi-Transparant Watermerk
+    overlay = Image.new("RGBA", image.size, (255, 255, 255, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
     
-    # Bovenste en onderste watermerk banners
-    bbox = draw.textbbox((0, 0), label)
+    watermark_text = "PROXY - NOT FOR SALE"
+    
+    bbox = overlay_draw.textbbox((0, 0), watermark_text)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+    text_img = Image.new("RGBA", (tw + 20, th + 20), (255, 255, 255, 0))
+    text_draw = ImageDraw.Draw(text_img)
     
-    padding = 12
-    banner_height = th + (padding * 2)
+    # Rood semi-transparant watermerk
+    text_draw.text((10, 10), watermark_text, fill=(255, 0, 0, 90))
+    
+    rotated_text = text_img.rotate(30, expand=True, resample=Image.BICUBIC)
+    
+    wx = (image.width - rotated_text.width) // 2
+    wy = (image.height - rotated_text.height) // 2
+    overlay.paste(rotated_text, (wx, wy), rotated_text)
+
+    image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+    # 4. Zwarte banners boven en onder
+    draw = ImageDraw.Draw(image)
+    banner_label = "PROXY - NOT FOR SALE"
+    
+    bbox_banner = draw.textbbox((0, 0), banner_label)
+    btw, bth = bbox_banner[2] - bbox_banner[0], bbox_banner[3] - bbox_banner[1]
+    
+    padding = 10
+    banner_height = bth + (padding * 2)
 
     # Banner bovenaan
     draw.rectangle((0, 0, image.width, banner_height), fill="black")
-    draw.text(((image.width - tw) // 2, padding), label, fill="white")
+    draw.text(((image.width - btw) // 2, padding), banner_label, fill="white")
 
     # Banner onderaan
     draw.rectangle((0, image.height - banner_height, image.width, image.height), fill="black")
-    draw.text(((image.width - tw) // 2, image.height - banner_height + padding), label, fill="white")
+    draw.text(((image.width - btw) // 2, image.height - banner_height + padding), banner_label, fill="white")
 
     return image
 
@@ -370,7 +400,7 @@ with st.sidebar:
     st.divider()
     st.markdown("### ⚠️ Rechten & Fair Use")
     st.markdown(
-        "Alle gegenereerde kaarten bevatten een expliciet **'PROXY - NOT FOR SALE'** watermerk. "
+        "Alle gegenereerde kaarten worden in **zwart-wit** afgedrukt met een **'PROXY - NOT FOR SALE'** watermerk. "
         "Deze proxies zijn **niet** toegestaan op officiële toernooien en mogen **niet** worden verkocht."
     )
 
@@ -473,7 +503,7 @@ st.markdown(
         Alle namen, handelsmerken, afbeeldingen en intellectuele eigendommen met betrekking tot <i>Disney Lorcana</i> zijn het exclusieve eigendom van Disney en Ravensburger.<br>
         Gegenereerde bestanden zijn uitsluitend bedoeld voor persoonlijk test- en speelgebruik (playtesting). Verkoop of commerciële verspreiding van deze materialen is strikt verboden.<br>
         <br>
-        <b>Copyright/Takedown Notice:</b> If you are a copyright holder and wish to request removal of content, please contact us directly at <i>wolfs.steve@gmail.com</i>.
+        <b>Copyright/Takedown Notice:</b> If you are a copyright holder and wish to request removal of content, please contact us directly at <i>your-email@domain.com</i>.
     </div>
     """,
     unsafe_allow_html=True
